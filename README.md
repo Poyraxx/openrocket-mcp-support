@@ -13,6 +13,66 @@
 
 OpenRocket is a free, fully featured model rocket simulator that allows you to design and simulate your rockets before actually building and flying them.
 
+## OpenRocket MCP Support Fork
+
+This repository is a modified OpenRocket fork that adds MCP-based AI control on top of the original simulator.
+
+- Original OpenRocket repository: [openrocket/openrocket](https://github.com/openrocket/openrocket)
+- Official OpenRocket website: [openrocket.info](https://openrocket.info/)
+- Official documentation: [OpenRocket ReadTheDocs](https://openrocket.readthedocs.io/en/latest/)
+
+### What this fork adds
+
+- `core` automation APIs for reading and mutating rocket documents programmatically
+- `swing` live bridge support so an AI client can control an open OpenRocket GUI session
+- `mcp/` stdio MCP server for Codex and other MCP-compatible clients
+- launcher scripts for starting the live OpenRocket session and the MCP server
+- an AI activity console that tails the automation log while OpenRocket is running
+
+### Quick start for the MCP-enabled version
+
+1. Install Java 17 or newer.
+2. Clone this repository.
+3. Start the OpenRocket live session:
+
+```powershell
+.\run-openrocket-live.cmd
+```
+
+4. Start the MCP server in a second terminal:
+
+```powershell
+.\mcp\run-openrocket-mcp.cmd
+```
+
+5. Point your MCP client to `mcp\run-openrocket-mcp.cmd`.
+
+For Codex, use `mcp\run-openrocket-mcp.cmd` as the server command.
+
+### What the launchers do
+
+- `run-openrocket-live.cmd`
+  - builds `installDist` when needed
+  - starts OpenRocket with the localhost live bridge enabled
+  - opens an `OpenRocket AI Console` window that tails `%USERPROFILE%\.openrocket\ai-automation.log`
+- `mcp\run-openrocket-mcp.cmd`
+  - builds `:mcp:installDist`
+  - starts the stdio MCP server
+  - forwards automation activity to the same OpenRocket log file
+
+### Project layout
+
+- `core/`: OpenRocket core plus automation layer
+- `swing/`: OpenRocket GUI plus live bridge integration
+- `mcp/`: MCP server that exposes OpenRocket control to AI clients
+- `run-openrocket-live.cmd` / `run-openrocket-live.ps1`: local launcher for the live GUI bridge
+
+### Notes
+
+- This repo keeps OpenRocket's original source tree and adds MCP support inside the same project.
+- Custom motor files are not bundled in this standalone repo; import your own `.eng` files if needed.
+- This project remains under OpenRocket's GPL licensing terms. See [LICENSE.TXT](LICENSE.TXT).
+
 --------
 
 ## 🛠️ Design, Visualize, and Analyze
