@@ -1,0 +1,120 @@
+*.DS_Store
+*~
+
+# /
+/bin
+/build
+/data
+/dists
+/misc
+/stuff
+/thesis
+/rawdump
+/tmp
+/loganalysis
+
+# /core/
+/core/loganalysis
+/core/build
+/core/tmp
+/core/misc
+/core/bin
+
+# /core/doc/techdoc/
+/core/doc/techdoc/*.aux
+/core/doc/techdoc/*.dvi
+/core/doc/techdoc/*.out
+/core/doc/techdoc/*.toc
+
+# /core/resources-src/pix/
+/core/resources-src/pix/sormus.xcf.gz
+/core/resources-src/pix/splashscreen-sormus.png
+/core/resources-src/pix/splashscreen-sormus.xcf.gz
+
+/swing/build
+/swing/bin
+/swing/tmp
+/mcp/build
+/core/src/main/resources/datafiles/components
+/core/src/main/resources/ReleaseNotes.md
+
+# IntelliJ
+# Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and Webstorm
+# Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
+# https://github.com/github/gitignore/blob/master/Global/JetBrains.gitignore
+
+# User-specific stuff:
+**/.idea/workspace.xml
+**/.idea/tasks.xml
+**/.idea/dictionaries
+**/.idea/vcs.xml
+**/.idea/jsLibraryMappings.xml
+**/.idea/copilot
+**/.idea/shelf
+swing/OpenRocket Swing.iml
+core/OpenRocket Core.iml
+lib-test/OpenRocket Library Test.iml
+
+# Sensitive or high-churn files:
+**/.idea/dataSources.ids
+**/.idea/dataSources.xml
+**/.idea/dataSources.local.xml
+**/.idea/sqlDataSources.xml
+**/.idea/dynamic.xml
+**/.idea/uiDesigner.xml
+**/.idea/workspace.xml
+
+# Gradle:
+**/.idea/libraries
+
+# Mongo Explorer plugin:
+**/.idea/mongoSettings.xml
+
+## File-based project format:
+**/*.iws
+
+## Plugin-specific files:
+
+# IntelliJ
+**/out/
+**/build/
+**/.gradle**
+
+# IntelliJ run configurations (keep some default configs though)
+!/.idea/runConfigurations/SwingStartup.xml
+!/.idea/runConfigurations/openrocket_jar.xml
+!/.idea/runConfigurations/openrocket_test.xml
+/.idea/runConfigurations/
+
+# VSCode
+.vscode/
+
+# mpeltonen/sbt-idea plugin
+**/.idea_modules/
+
+# JIRA plugin
+atlassian-ide-plugin.xml
+
+# Crashlytics plugin (for Android Studio and IntelliJ)
+com_crashlytics_export_strings.xml
+crashlytics.properties
+crashlytics-build.properties
+fabric.properties
+
+openrocket.log
+**/hs_err_pid*.log
+
+*.snap
+
+# Sphinx documentation
+docs/build
+
+# AI tools
+**/copilot.*.xml
+**/AGENTS.md
+**/CLAUDE.md
+**/GEMINI.md
+**/.claude
+
+# Environment files
+**/.env

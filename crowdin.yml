@@ -1,0 +1,14 @@
+project_id: '711913'
+api_token_env: CROWDIN_API_TOKEN
+base_path: .
+base_url: 'https://api.crowdin.com'
+preserve_hierarchy: 1
+pull_request_title: Sync translations from Crowdin
+pull_request_labels:
+  - translation
+files:
+  - source: /core/src/main/resources/l10n/messages.properties
+    translation: /core/src/main/resources/l10n/messages_%two_letters_code%.properties
+    type: properties
+    escape_quotes: 3
+    escape_special_characters: 0

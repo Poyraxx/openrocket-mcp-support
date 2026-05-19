@@ -1,0 +1,99 @@
+
+The current OpenRocket file format is "documented" only as the
+reference implementation.  This will hopefully change in the future.
+
+
+The "version" attribute of the <openrocket> tag describes the file
+format version used, while the "creator" attribute MAY describe the
+software and version used to write the document.
+
+The file format version is increased every time the format is
+changed.  The minor number is increased when changes are made that are
+mostly backward-compatible, meaning that older software versions
+should be able to read the design sans the new features.  The major
+number is increased when changes are made that render the design
+problematic or impossible to read for older software.  For maximum
+compatibility software should save a file in the oldest file format
+version that supports all the necessary design features.
+
+
+The following file format versions exist:
+
+
+1.0:  File format version of the first public release (OpenRocket 0.9.0)
+
+1.1:  Introduced with OpenRocket 0.9.4.  Adds support for saving fin
+      tabs (<tabheight>, <tablength> and <tabposition> elements) and
+      allows attaching subcomponents to a tube coupler (previously
+      forbidden).
+
+1.2:  Introduced with OpenRocket 1.1.1.  Adds the <digest> tag to
+      motor definitions.  The digest uniquely identifies the
+      functional characteristics of a particular thrust curve motor.
+
+1.3:  Introduced with OpenRocket 1.1.9.  Adds the <launchlongitude> and
+      <geodeticmethod> parameters to the simulation conditions element.
+
+1.4:  Introduced with OpenRocket 12.03.  Adds the launchrodvelocity and
+      deploymentvelocity attributes to <flightdata> element.  The motor
+      digesting algorithm was changed.  Adds <separationevent> and
+      <separationdelay> elements to stage components (except sustainer).
+
+1.5:  Introduced with OpenRocket 12.09.  Added ComponentPresets.
+      Added lowerstageseparation as recovery device deployment event.
+      Added <datatypes> section for supporting datatypes other than
+      internal ones. Currently only supports datatypes from custom expressions.
+      
+1.6:  Introduced with OpenRocket 13.04.  Added component Appearances (decals & paint)
+      Added configurable parameters to recovery devices, motor ignition and separation.
+      
+1.7:  Introduced with OpenRocket 15.03.
+      Added simulation extensions and related configuration.
+      Support for TubeFins.
+
+1.8:  Introduced with OpenRocket 22.02.
+      Added new RailButton (<railbutton>, Pods (<podset>), and Booster (<parallelstage>) components
+      Added separate internal appearance option (<insideappearance>) for Body Tubes, Nose Cones,
+      Transitions, Inner Tubes, Launch Lugs, and Fins.
+      Added PhotoStudio settings saving (<photostudio>)
+      Added override CD parameter (<overridecd>)
+      Added stage activeness remembrance (<stage> under <motorconfiguration>)
+      Added <isflipped> parameter for Nose Cones
+      Separated <overridesubcomponents> into individual parameters for mass, CG, and CD.
+      Rename <fincount> to <instancecount> (<fincount> remains for backward compatibility)
+      Rename <position> to <axialoffset> (<position> remains for backward compatibility)
+      Rename <rotation> to <angleoffset> (<rotation> remains for backward compatibility)
+
+1.9:  Introduced with OpenRocket 23.09.
+      Added ID for each rocket component, to in turn add this ID as a source for flight events.
+
+1.10: Introduced with OpenRocket 24.12.
+      Added a priority attribute to simulation warnings.
+      Added document preferences (<docprefs>).
+      Added wind model settings (<wind mode="{average or multilevel}">), and windmodeltype to simulation conditions.
+      Added warning flight events
+      Added <maxtime> attribute to simulation conditions.
+      Added <designtype> and  <kitname> to <rocket> element.
+
+1.11: Introduced with OpenRocket 26.XX.
+      Added <simulationsteppermethod> to <simulation >element.
+      Added simulation.table.hiddenColumns document preference for simulation table column visibility.
+      Include a file preview image of the 2D side view in the .ork zip file ('preview.png').
+      Added gravity model settings (<gravity model="{wgs or constant}">) to simulation conditions.
+      Added drag and stability lookup CSV tables (<draglookup> and <stabilitylookup>)
+      to simulation conditions. These elements support both:
+        - A "file" attribute containing the path to the CSV file
+        - Embedded <row> elements containing the actual CSV data row by row
+      Format: <draglookupcsv file="path/to/file.csv">
+               <row>Mach,AoA,Cd</row>
+               <row>0.30,0,0.35</row>
+               ...
+              </draglookupcsv>
+      When loading, embedded row data is preferred over the file path. If no rows
+      are embedded, the file path is used to load from disk (backward compatible).
+      Embedded thrust curve motor data as .rse (RockSim engine) files in a
+      thrustcurves/ directory within the .ork zip archive, keyed by motor digest.
+      This allows designs to be self-contained when sharing custom motors.
+      Added <baserelativehumidity> to the atmosphere model in simulation conditions.
+      Support 'auto' line length for parachute and shock cord.
+      Added 2D and 3D background and text color preferences to <docprefs>.

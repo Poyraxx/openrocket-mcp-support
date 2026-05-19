@@ -1,0 +1,20 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+java {
+    modularity.inferModulePath = false
+}
+
+application {
+    mainClass = 'info.openrocket.mcp.OpenRocketMcpServer'
+}
+
+dependencies {
+    implementation project(':core')
+    implementation platform('io.modelcontextprotocol.sdk:mcp-bom:1.1.2')
+    implementation 'io.modelcontextprotocol.sdk:mcp'
+    implementation 'com.google.code.gson:gson:2.13.2'
+    implementation 'org.slf4j:slf4j-api:2.0.17'
+}

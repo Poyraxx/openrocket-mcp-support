@@ -1,0 +1,51 @@
+#!/bin/bash
+
+JAVA_BIN="$JAVA_HOME/bin/java"
+
+export DESKTOP_SESSION=gnome
+export XDG_SESSION_DESKTOP=gnome
+export XDG_CURRENT_DESKTOP=GNOME
+
+# OpenRocket now manages its own FlatLaf look-and-feel and bundled UI fonts.
+# Keep Snap launcher options limited to generic rendering and sandbox paths.
+JAVA_OPTS="-Dsun.java2d.xrender=true -Dawt.useSystemAAFontSettings=on -Dswing.aatext=true -Djava.io.tmpdir=$SNAP_USER_COMMON"
+
+ARCH="$(uname -m)"
+GC_OPTS=""
+case "$ARCH" in
+  aarch64|x86_64) GC_OPTS="-XX:+UseZGC" ;;   # if you want ZGC on 64-bit
+  *)              GC_OPTS="-XX:+UseG1GC" ;;  # 32-bit fallback
+esac
+
+#
+# Determine if we need to migrate user preferences from a previous
+# installation or not. This will be determined if the dot-java-user-prefs
+# interface is connected (should be autoconnected via the installation)
+# and the user's $HOME/.java/.userPrefs/OpenRocket directory exists.
+# Note, $HOME is remapped within a snap so it is necessary to use
+# SNAP_REAL_HOME instead.
+#
+if snapctl is-connected dot-java-user-prefs-openrocket 2>/dev/null; then
+    SRC_PREFS=$SNAP_REAL_HOME/.java/.userPrefs/OpenRocket
+    TGT_PREFS=$SNAP_USER_COMMON/.java/.userPrefs/
+    if [[ -d $SRC_PREFS && ! -d "$TGT_PREFS" ]]; then
+        echo "Migrating user preferences from $SRC_PREFS to $TGT_PREFS"
+        mkdir -p $TGT_PREFS
+        cp -r "$SRC_PREFS" "$TGT_PREFS"
+    fi
+fi
+
+# Configure the preferences to use $SNAP_USER_COMMON
+# rather than the standard $HOME/.java/.userPrefs directory
+# For security reasons, the Snap store team will not grant
+# write access generically to the java user preferences storage
+# as it would allow the app to read any data stored in the java
+# user prefs dir. So we'll force it to use the snap.
+JAVA_OPTS="$JAVA_OPTS -Djava.util.prefs.userRoot=$SNAP_USER_COMMON/"
+
+if ! snapctl is-connected dot-openrocket 2>/dev/null; then
+    JAVA_OPTS="$JAVA_OPTS -Duser.home=$SNAP_USER_COMMON/"
+fi
+
+export _JAVA_OPTIONS=$JAVA_OPTS
+exec $JAVA_BIN $GC_OPTS -jar $SNAP/OpenRocket.jar "$@"

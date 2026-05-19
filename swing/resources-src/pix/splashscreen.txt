@@ -1,0 +1,15 @@
+
+OpenRocket text:
+
+Create logo using Gimp's "Blended" logo script.
+Apply suitable gradient to text layer
+(softened "Horizon 1" -> "Horizon 1 soft").
+Font: Kanit (Italic): https://fonts.google.com/specimen/Kanit?query=kanit
+
+
+Background starfield:
+
+Credits:  NASA/JPL/MPS/DLR/IDA
+(http://photojournal.jpl.nasa.gov/catalog/PIA12066)
+Figure 2 with texts removed, scaled down.
+

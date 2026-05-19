@@ -1,0 +1,557 @@
+package info.openrocket.swing.gui.simulation;
+
+import info.openrocket.core.preferences.ApplicationPreferences;
+import net.miginfocom.swing.MigLayout;
+import info.openrocket.core.document.OpenRocketDocument;
+import info.openrocket.core.document.Simulation;
+import info.openrocket.core.document.events.DocumentChangeEvent;
+import info.openrocket.swing.gui.components.ConfigurationComboBox;
+import info.openrocket.swing.gui.components.StyledLabel;
+import info.openrocket.swing.gui.util.ColorConversion;
+import info.openrocket.swing.gui.util.GUIUtil;
+import info.openrocket.swing.gui.theme.UITheme;
+import info.openrocket.core.l10n.Translator;
+import info.openrocket.core.rocketcomponent.FlightConfiguration;
+import info.openrocket.core.rocketcomponent.FlightConfigurationId;
+import info.openrocket.core.rocketcomponent.Rocket;
+import info.openrocket.core.simulation.extension.SimulationExtension;
+import info.openrocket.core.startup.Application;
+import info.openrocket.core.util.StateChangeListener;
+
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JDialog;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTabbedPane;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.GraphicsEnvironment;
+import java.awt.Rectangle;
+import java.awt.Window;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
+import java.util.ArrayList;
+import java.util.EventObject;
+import java.util.List;
+
+public class SimulationConfigDialog extends JDialog {
+	private static final long serialVersionUID = -1068127685642912715L;
+
+	private final Window parentWindow;
+	private final Simulation[] simulationList;
+	private final OpenRocketDocument document;
+	private final JTabbedPane tabbedPane;
+	private JButton okButton;
+	private JButton cancelButton;
+	private static final Translator trans = Application.getTranslator();
+	private static final ApplicationPreferences preferences = Application.getPreferences();
+
+
+	private final WindowListener windowCloseCancelListener;
+	private final boolean initialIsSaved;		// Whether the document was saved before the dialog was opened
+	private boolean isModified = false;			// Whether the simulation has been modified
+	private final boolean isNewSimulation;		// Whether you are editing a new simulation, or an existing one
+
+	private static final int LAUNCH_CONDITIONS_IDX = 0;
+	private static final int SIMULATION_OPTIONS_IDX = 1;
+	private static final int WARNINGS_IDX = 2;
+	private static final int PLOT_IDX = 3;
+	private static final int EXPORT_IDX = 4;
+
+	private final SimulationPlotPanel plotTab;
+	private final SimulationExportPanel exportTab;
+	private static final int DIALOG_SCREEN_MARGIN = 80;
+
+	private static Color multiCompEditColor;
+
+	static {
+		initColors();
+	}
+
+	public SimulationConfigDialog(Window parent, final OpenRocketDocument document, boolean isNewSimulation, Simulation... sims) {
+		super(parent, sims.length == 1 ? trans.get("simedtdlg.title.Editsim") : trans.get("simedtdlg.title.MultiSimEdit"),
+				JDialog.ModalityType.DOCUMENT_MODAL);
+		this.document = document;
+		this.parentWindow = parent;
+		this.simulationList = sims;
+		this.initialIsSaved = document.isSaved();
+		this.isNewSimulation = isNewSimulation;
+
+		if (simulationList.length == 1) {
+			document.addUndoPosition("Edit " + simulationList[0].getName());
+		} else {
+			document.addUndoPosition("Edit simulations");
+		}
+
+		simulationList[0].addChangeListener(new StateChangeListener() {
+			@Override
+			public void stateChanged(EventObject e) {
+				isModified = true;
+				setTitle("* " + getTitle());			// Add component changed indicator to the title
+				simulationList[0].removeChangeListener(this);	// Only do this once
+			}
+		});
+
+		this.setLayout(new BorderLayout());
+
+		final JPanel contentPanel = new JPanel(new MigLayout("fill", "[grow]", "[][grow]"));
+
+		// ======== Top panel ========
+		addTopPanel(document, contentPanel);
+
+
+		// ======== Tabbed pane ========
+		this.tabbedPane = new JTabbedPane();
+
+		//// Launch conditions
+		tabbedPane.addTab(trans.get("SimulationConfigDialog.tab.Launchcond"),
+				createTabScrollPane(new SimulationConditionsPanel(simulationList[0])));
+
+		//// Simulation options
+		tabbedPane.addTab(trans.get("SimulationConfigDialog.tab.Simopt"),
+				createTabScrollPane(new SimulationOptionsPanel(document, simulationList[0])));
+
+		//// Simulation Warnings
+		final SimulationWarningsPanel warningsTab = new SimulationWarningsPanel(simulationList[0]);
+		JScrollPane warningsScrollPane = new JScrollPane(warningsTab);
+		warningsScrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		warningsScrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		Dimension d = warningsScrollPane.getPreferredSize();
+		warningsScrollPane.setPreferredSize(new Dimension(d.width, 200));
+		tabbedPane.addTab(trans.get("SimulationConfigDialog.tab.Warnings"), warningsScrollPane);
+
+		if (isMultiCompEdit()) {
+			tabbedPane.setEnabledAt(WARNINGS_IDX, false);
+			tabbedPane.setToolTipTextAt(WARNINGS_IDX, trans.get("SimulationConfigDialog.tab.warnDis.ttip"));
+		}
+
+		//// Plot data
+		boolean hasData = simulationList[0].hasSimulationData();
+		if (hasData) {
+			this.plotTab = SimulationPlotPanel.create(simulationList[0]);
+		} else {
+			this.plotTab = null;
+		}
+		tabbedPane.addTab(trans.get("SimulationConfigDialog.tab.Plotdata"), plotTab);
+		if (isMultiCompEdit() || !hasData) {
+			tabbedPane.setEnabledAt(PLOT_IDX, false);
+			String ttip = hasData ? trans.get("SimulationConfigDialog.tab.plotDis.ttip") : trans.get("SimulationConfigDialog.tab.plotNoData.ttip");
+			tabbedPane.setToolTipTextAt(PLOT_IDX, ttip);
+		}
+
+		//// Export data
+		if (hasData) {
+			this.exportTab = SimulationExportPanel.create(simulationList[0]);
+		} else {
+			this.exportTab = null;
+		}
+		tabbedPane.addTab(trans.get("SimulationConfigDialog.tab.Exportdata"), exportTab);
+		if (isMultiCompEdit() || !hasData) {
+			tabbedPane.setEnabledAt(EXPORT_IDX, false);
+			String ttip = hasData ? trans.get("SimulationConfigDialog.tab.expDis.ttip") : trans.get("SimulationConfigDialog.tab.expNoData.ttip");
+			tabbedPane.setToolTipTextAt(EXPORT_IDX, ttip);
+		}
+
+		contentPanel.add(tabbedPane, "grow, push, wrap");
+
+		// ======== Bottom panel ========
+		JPanel bottomPanel = generateBottomPanel();
+
+		tabbedPane.addChangeListener(new ChangeListener() {
+
+			@Override
+			public void stateChanged(ChangeEvent e) {
+				if (okButton == null) {
+					return;
+				}
+				int selectedIndex = tabbedPane.getSelectedIndex();
+				switch (selectedIndex) {
+					case LAUNCH_CONDITIONS_IDX:
+					case SIMULATION_OPTIONS_IDX:
+						okButton.setText(trans.get("dlg.but.ok"));
+						cancelButton.setText(trans.get("dlg.but.cancel"));
+						cancelButton.setVisible(true);
+						SimulationConfigDialog.this.revalidate();
+						break;
+					case WARNINGS_IDX:
+						okButton.setText(trans.get("dlg.but.close"));
+						cancelButton.setVisible(false);
+						SimulationConfigDialog.this.revalidate();
+						break;
+					case PLOT_IDX:
+						okButton.setText(trans.get("SimulationConfigDialog.btn.plot"));
+						cancelButton.setText(trans.get("dlg.but.close"));
+						cancelButton.setVisible(true);
+						SimulationConfigDialog.this.revalidate();
+						break;
+					case EXPORT_IDX:
+						okButton.setText(trans.get("SimulationConfigDialog.btn.export"));
+						cancelButton.setText(trans.get("dlg.but.close"));
+						cancelButton.setVisible(true);
+						SimulationConfigDialog.this.revalidate();
+						break;
+				}
+			}
+
+		});
+
+		this.add(contentPanel, BorderLayout.CENTER);
+		this.add(bottomPanel, BorderLayout.SOUTH);
+		this.validate();
+		this.pack();
+		capDialogToScreenBounds();
+
+		this.setLocationByPlatform(true);
+
+		this.windowCloseCancelListener = new WindowAdapter() {
+			@Override
+			public void windowClosed(WindowEvent e) {
+				cancelClose();
+			}
+		};
+		this.addWindowListener(windowCloseCancelListener);
+
+		GUIUtil.setDisposableDialogOptions(this, null);
+		GUIUtil.rememberWindowPosition(this);
+		GUIUtil.rememberWindowSize(this);
+		capDialogToScreenBounds();
+	}
+
+	/**
+	 * Keep the dialog header and buttons fixed while tall tab contents scroll inside the tab body.
+	 */
+	private JScrollPane createTabScrollPane(JPanel panel) {
+		JScrollPane scrollPane = new JScrollPane(panel);
+		scrollPane.setBorder(null);
+		scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.setMinimumSize(new Dimension(0, 0));
+		scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+		return scrollPane;
+	}
+
+	/**
+	 * Prevent the packed or restored dialog size from exceeding the usable screen area.
+	 */
+	private void capDialogToScreenBounds() {
+		Rectangle screenBounds = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+		int maxWidth = Math.max(0, screenBounds.width - DIALOG_SCREEN_MARGIN);
+		int maxHeight = Math.max(0, screenBounds.height - DIALOG_SCREEN_MARGIN);
+
+		if (maxWidth == 0 || maxHeight == 0) {
+			return;
+		}
+
+		int width = Math.min(getWidth(), maxWidth);
+		int height = Math.min(getHeight(), maxHeight);
+		setSize(new Dimension(width, height));
+	}
+
+	private static void initColors() {
+		updateColors();
+		UITheme.Theme.addUIThemeChangeListener(SimulationConfigDialog::updateColors);
+	}
+
+	public static void updateColors() {
+		multiCompEditColor = UITheme.getColor(UITheme.Keys.MULTI_COMP_EDIT);
+	}
+
+	public void switchToSettingsTab() {
+		tabbedPane.setSelectedIndex(LAUNCH_CONDITIONS_IDX);
+	}
+
+	public void switchToWarningsTab() {
+		tabbedPane.setSelectedIndex(WARNINGS_IDX);
+	}
+
+	public void switchToPlotTab() {
+		tabbedPane.setSelectedIndex(PLOT_IDX);
+	}
+
+	public void switchToExportTab() {
+		tabbedPane.setSelectedIndex(EXPORT_IDX);
+	}
+
+	private void addTopPanel(OpenRocketDocument document, JPanel contentPanel) {
+		JPanel topPanel = new JPanel(new MigLayout("fill, ins 0"));
+
+		//// Name:
+		topPanel.add(new JLabel(trans.get("simedtdlg.lbl.Simname") + " "), "growx 0, gapright para");
+		final JTextField field = new JTextField(simulationList[0].getName());
+		field.getDocument().addDocumentListener(new DocumentListener() {
+			@Override
+			public void changedUpdate(DocumentEvent e) {
+				setText();
+			}
+
+			@Override
+			public void insertUpdate(DocumentEvent e) {
+				setText();
+			}
+
+			@Override
+			public void removeUpdate(DocumentEvent e) {
+				setText();
+			}
+
+			private void setText() {
+				String name = field.getText();
+				if (name == null || name.isEmpty())
+					return;
+				simulationList[0].setName(name);
+
+			}
+		});
+		topPanel.add(field, "growx, pushx");
+
+		//// Flight selector
+		//// Flight configuration:
+		JLabel label = new JLabel(trans.get("simedtdlg.lbl.Flightcfg"));
+		//// Select the motor configuration to use.
+		label.setToolTipText(trans.get("simedtdlg.lbl.ttip.Flightcfg"));
+		topPanel.add(label, "gapleft para, growx 0, gapright para");
+
+		final Rocket rkt = document.getRocket();
+		final FlightConfiguration config = rkt.getFlightConfiguration(simulationList[0].getFlightConfigurationId());
+		final ConfigurationComboBox configComboBox = new ConfigurationComboBox(rkt, false);
+		configComboBox.setSelectedItem(config);
+
+		//// Select the motor configuration to use.
+		configComboBox.setToolTipText(trans.get("simedtdlg.combo.ttip.Flightcfg"));
+		configComboBox.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				FlightConfiguration config = (FlightConfiguration)configComboBox.getSelectedItem();
+				FlightConfigurationId id = config.getId();
+
+				simulationList[0].setFlightConfigurationId( id );
+			}
+		});
+		topPanel.add(configComboBox, "growx, pushx, wrap");
+
+		//// Display current simulation status
+		JLabel statusLabel = new JLabel(trans.get("simpanel.col.Status") + ":");
+		topPanel.add(statusLabel, "growx 0, gapright para");
+
+		String statusText = simulationList[0].getStatusDescription();
+		Color statusColor = UITheme.getStatusColor(simulationList[0].getStatus());
+
+		JLabel simStatus = new JLabel("<html>" +
+				ColorConversion.formatHTMLColor(statusColor, statusText) +
+				"</html>"
+		);
+		topPanel.add(simStatus, "span 3, wrap");
+
+		contentPanel.add(topPanel, "growx, height pref, wrap");
+	}
+
+	private JPanel generateBottomPanel() {
+		final JPanel bottomPanel = new JPanel(new MigLayout("fill, ins 0 n n n"));
+
+		//// Multi-simulation edit
+		if (isMultiCompEdit()) {
+			StyledLabel multiSimEditLabel = new StyledLabel("", -1, StyledLabel.Style.BOLD);
+			multiSimEditLabel.setFontColor(multiCompEditColor);
+			multiSimEditLabel.setText(trans.get("simedtdlg.title.MultiSimEdit"));
+			StringBuilder components = new StringBuilder(trans.get("simedtdlg.title.MultiSimEdit.ttip"));
+			for (int i = 0; i < simulationList.length; i++) {
+				if (i < simulationList.length - 1) {
+					components.append(simulationList[i].getName()).append(", ");
+				} else {
+					components.append(simulationList[i].getName());
+				}
+			}
+			multiSimEditLabel.setToolTipText(components.toString());
+			bottomPanel.add(multiSimEditLabel, "align left");
+		}
+
+		//// Run simulation button
+		// TODO: disable when sim is up to date?
+		/*JButton button = new JButton(trans.get("SimulationEditDialog.btn.simulateAndPlot"));
+		if (!isSingleEdit()) {
+			button.setText(trans.get("SimulationEditDialog.btn.simulate"));
+		}
+		button.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				copyChangesToAllSims();
+				SimulationRunDialog dialog = SimulationRunDialog.runSimulations(parentWindow, SimulationEditDialog.this.document, simulationList);
+				if (allowsPlotMode() && dialog.isAllSimulationsSuccessful()) {
+					refreshView();
+					setPlotMode();
+				}
+			}
+		});
+		simEditPanel.add(button, "align right, gapright 10lp, tag ok");*/
+
+		//// Cancel button
+		this.cancelButton = new JButton(trans.get("dlg.but.cancel"));
+		this.cancelButton.setToolTipText(trans.get("SimulationConfigDialog.btn.Cancel.ttip"));
+		this.cancelButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				cancelClose();
+			}
+		});
+		bottomPanel.add(this.cancelButton, "split 2, tag ok, pushx, align right");
+
+		//// Ok button
+		this.okButton = new JButton(trans.get("dlg.but.ok"));
+		this.okButton.setToolTipText(trans.get("SimulationConfigDialog.btn.OK.ttip"));
+		this.okButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				copyChangesToAllSims();
+
+				// Run outdated simulations
+				Simulation[] outdatedSims = getOutdatedSimulations();
+				if (outdatedSims.length > 0) {
+					new SimulationRunDialog(SimulationConfigDialog.this.parentWindow, document, outdatedSims).setVisible(true);
+				}
+
+				int tabIdx = tabbedPane.getSelectedIndex();
+				if (tabIdx == PLOT_IDX) {
+					if (plotTab == null) {
+						closeDialog();
+						return;
+					}
+					JDialog plot = plotTab.doPlot(SimulationConfigDialog.this.parentWindow);
+					if (plot != null) {
+						plot.setVisible(true);
+					}
+					return;
+				} else if (tabIdx == EXPORT_IDX) {
+					if (exportTab == null) {
+						closeDialog();
+						return;
+					}
+					exportTab.doExport();
+					return;
+				}
+
+				closeDialog();
+			}
+		});
+		bottomPanel.add(this.okButton, "tag ok");
+
+		return bottomPanel;
+	}
+
+	private void cancelClose() {
+		if (tabbedPane.getSelectedIndex() == LAUNCH_CONDITIONS_IDX ||
+				tabbedPane.getSelectedIndex() == SIMULATION_OPTIONS_IDX) {
+			cancelSimEdit();
+		} else {
+			// Normal close action
+			closeDialog();
+		}
+
+		// TODO: include plot/export undo?
+	}
+
+	private void copyChangesToAllSims() {
+		if (isMultiCompEdit()) {
+			for (int i = 1; i < simulationList.length; i++) {
+				simulationList[i].getOptions().copyConditionsFrom(simulationList[0].getOptions());
+				simulationList[i].getSimulationExtensions().clear();
+				for (SimulationExtension c : simulationList[0].getSimulationExtensions()) {
+					simulationList[i].getSimulationExtensions().add(c.clone());
+				}
+			}
+		}
+	}
+
+	private Simulation[] getOutdatedSimulations() {
+		List<Simulation> outdated = new ArrayList<>();
+		for (Simulation sim : simulationList) {
+			if (!Simulation.isStatusUpToDate(sim.getStatus())) {
+				outdated.add(sim);
+			}
+		}
+		return outdated.toArray(new Simulation[0]);
+	}
+
+	private boolean isMultiCompEdit() {
+		return simulationList.length > 1;
+	}
+
+	private void closeDialog() {
+		SwingUtilities.invokeLater(new Runnable() {
+			@Override
+			public void run() {
+				SimulationConfigDialog.this.removeWindowListener(windowCloseCancelListener);
+				SimulationConfigDialog.this.dispose();
+			}
+		});
+	}
+
+	private JPanel createCancelOperationContent() {
+		JPanel panel = new JPanel(new MigLayout());
+		String msg = isNewSimulation ? trans.get("SimulationConfigDialog.CancelOperation.msg.undoAdd") :
+				trans.get("SimulationConfigDialog.CancelOperation.msg.discardChanges");
+		JLabel msgLabel = new JLabel(msg);
+		JCheckBox dontAskAgain = new JCheckBox(trans.get("SimulationConfigDialog.CancelOperation.checkbox.dontAskAgain"));
+		dontAskAgain.setSelected(false);
+		dontAskAgain.addItemListener(new ItemListener() {
+			@Override
+			public void itemStateChanged(ItemEvent e) {
+				if (e.getStateChange() == ItemEvent.SELECTED) {
+					preferences.setShowDiscardSimulationConfirmation(false);
+				}
+				// Unselected state should be not be possible and thus not be handled
+			}
+		});
+
+		panel.add(msgLabel, "left, wrap");
+		panel.add(dontAskAgain, "left, gaptop para");
+
+		return panel;
+	}
+
+	private void cancelSimEdit() {
+		// Don't do anything on cancel if you are editing an existing simulation, and it is not modified
+		if (!isNewSimulation && !isModified) {
+			closeDialog();
+			return;
+		}
+
+		// Apply the cancel operation if set to auto discard in preferences
+		if (!preferences.isShowDiscardSimulationConfirmation()) {
+			discardChanges();
+			return;
+		}
+
+		// Yes/No dialog: Are you sure you want to discard your changes?
+		JPanel msg = createCancelOperationContent();
+		int resultYesNo = JOptionPane.showConfirmDialog(SimulationConfigDialog.this, msg,
+				trans.get("SimulationConfigDialog.CancelOperation.title"), JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+		if (resultYesNo == JOptionPane.YES_OPTION) {
+			discardChanges();
+		}
+	}
+
+	private void discardChanges() {
+			if (document.isUndoAvailable()) {
+				document.undo();
+			}
+			document.setSaved(this.initialIsSaved);			// Restore the saved state of the document
+			document.fireDocumentChangeEvent(new DocumentChangeEvent(this));
+
+			closeDialog();
+		}
+	}
