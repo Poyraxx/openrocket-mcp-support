@@ -298,6 +298,24 @@ tasks.register('externalComponentsValidate') {
     }
 }
 
+tasks.named('test') {
+    exclude '**/MemoryUsageTest.class'
+}
+
+def memoryUsageTest = tasks.register('memoryUsageTest', Test) {
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = files(sourceSets.test.runtimeClasspath)
+    include '**/MemoryUsageTest.class'
+    useJUnitPlatform()
+    maxHeapSize = '1536m'
+    systemProperty 'user.language', 'en'
+    systemProperty 'user.country', 'US'
+}
+
+tasks.named('test') {
+    dependsOn memoryUsageTest
+}
+
 jacocoTestCoverageVerification {
     dependsOn jacocoTestReport
     violationRules {

@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
@@ -40,6 +41,8 @@ import info.openrocket.core.rocketcomponent.RailButton;
 import info.openrocket.core.rocketcomponent.RecoveryDevice;
 import info.openrocket.core.rocketcomponent.RocketComponent;
 import info.openrocket.core.rocketcomponent.TubeFinSet;
+import info.openrocket.core.document.PlotAppearance;
+import info.openrocket.core.util.LineStyle;
 import info.openrocket.core.util.ORColor;
 import info.openrocket.core.arch.SystemInfo;
 import info.openrocket.core.document.Simulation;
@@ -64,6 +67,7 @@ public class SwingPreferences extends ApplicationPreferences {
 
 	public static final String NODE_WINDOWS = "windows";
 	public static final String NODE_TABLES = "tables";
+	private static final String NODE_PLOT_DEFAULT_APPEARANCES = "PlotDefaultAppearances";
 	public static final String UI_SCALE = "UIScaling";
 	private static final String UI_FONT_SIZE = "UIFontSize";
 	public static final String UI_FONT_STYLE = "UIFontStyle";
@@ -114,6 +118,10 @@ public class SwingPreferences extends ApplicationPreferences {
 
 	private final Map<String, Set<String>> cachedNodeKeys = new HashMap<>();
 
+	// The design figure asks for the default component colors on every paint, and looking them up in the
+	// preference store each time was a notable part of the painting time
+	private final Map<Class<? extends RocketComponent>, ORColor> defaultColorCache = new ConcurrentHashMap<>();
+
 
 	public SwingPreferences() {
 		Preferences root = Preferences.userRoot();
@@ -146,6 +154,7 @@ public class SwingPreferences extends ApplicationPreferences {
 
 	public void updateColors() {
 		fillDefaultComponentColors();
+		clearDefaultColorCache();
 	}
 
 	public String getNodename() {
@@ -184,6 +193,7 @@ public class SwingPreferences extends ApplicationPreferences {
 			}
 			PREFNODE = root.node(NODENAME);
 			cachedNodeKeys.clear();
+			clearDefaultColorCache();
 			UnitGroup.resetDefaultUnits();
 			storeDefaultUnits();
 			log.info("Cleared preferences");
@@ -196,8 +206,23 @@ public class SwingPreferences extends ApplicationPreferences {
 	 * Store the current OpenRocket version into the preferences to allow for preferences migration.
 	 */
 	private void storeVersion() {
-		PREFNODE.put("OpenRocketVersion", BuildProperties.getVersion());
-		cacheKeyAdded(PREFNODE, "OpenRocketVersion");
+		if (putIfChanged(PREFNODE, "OpenRocketVersion", BuildProperties.getVersion())) {
+			cacheKeyAdded(PREFNODE, "OpenRocketVersion");
+		}
+	}
+
+	/**
+	 * Store a value unless it is already stored. Writing to the preference store is slow on some platforms
+	 * (about a millisecond on macOS), even when the value does not change, while reading is cheap.
+	 *
+	 * @return true if the value was written
+	 */
+	private static boolean putIfChanged(Preferences node, String key, String value) {
+		if (value.equals(node.get(key, null))) {
+			return false;
+		}
+		node.put(key, value);
+		return true;
 	}
 
 	/**
@@ -492,16 +517,10 @@ public class SwingPreferences extends ApplicationPreferences {
 
 	/**
 	 * Get the current font style used for the UI.
-	 * Legacy preference values are normalized to the canonical Inter style IDs when read.
-	 * @return the canonical stored style identifier
+	 * @return the current style weight (e.g. "Inter-Regular")
 	 */
 	public String getUIFontStyle() {
-		String fontStyle = getString(UI_FONT_STYLE, UIPreferencesPanel.FontStyle.REGULAR.getFontName());
-		String normalizedFontStyle = normalizeUIFontStyle(fontStyle);
-		if (!normalizedFontStyle.equals(fontStyle)) {
-			putString(UI_FONT_STYLE, normalizedFontStyle);
-		}
-		return normalizedFontStyle;
+		return getString(UI_FONT_STYLE, UIPreferencesPanel.FontStyle.REGULAR.getFontName());
 	}
 
 	/**
@@ -509,32 +528,7 @@ public class SwingPreferences extends ApplicationPreferences {
 	 * @param fontWeight the font weight to set
 	 */
 	public void setUIFontStyle(String fontWeight) {
-		putString(UI_FONT_STYLE, normalizeUIFontStyle(fontWeight));
-	}
-
-	/**
-	 * Converts legacy font identifiers to the canonical IDs used by the current UI.
-	 */
-	private static String normalizeUIFontStyle(String fontStyle) {
-		if ("Inter-Regular_Light".equals(fontStyle)) {
-			return GUIUtil.UI_FONT_STYLE_LIGHT;
-		}
-		if ("Inter-Regular_Medium".equals(fontStyle)) {
-			return GUIUtil.UI_FONT_STYLE_MEDIUM;
-		}
-		if ("Inter-Regular_Bold".equals(fontStyle)) {
-			return GUIUtil.UI_FONT_STYLE_BOLD;
-		}
-		if ("Inter-Regular".equals(fontStyle)) {
-			return GUIUtil.UI_FONT_STYLE_REGULAR;
-		}
-
-		for (UIPreferencesPanel.FontStyle style : UIPreferencesPanel.FontStyle.values()) {
-			if (style.getFontName().equals(fontStyle)) {
-				return fontStyle;
-			}
-		}
-		return GUIUtil.UI_FONT_STYLE_REGULAR;
+		putString(UI_FONT_STYLE, fontWeight);
 	}
 
 	/**
@@ -585,12 +579,25 @@ public class SwingPreferences extends ApplicationPreferences {
 		putBoolean(UPDATE_ROCKET_WHILE_DRAGGING_POINT, update);
 	}
 
-	// getDefaultColor is in ApplicationPreferences
+	@Override
+	public ORColor getDefaultColor(Class<? extends RocketComponent> c) {
+		ORColor color = defaultColorCache.computeIfAbsent(c, super::getDefaultColor);
+		// ORColor is mutable, so callers get their own copy
+		return new ORColor(color.getRed(), color.getGreen(), color.getBlue(), color.getAlpha());
+	}
 
 	public final void setDefaultColor(Class<? extends RocketComponent> c, ORColor color) {
 		if (color == null)
 			return;
 		putString("componentColors", c.getSimpleName(), stringifyColor(color));
+		clearDefaultColorCache();
+	}
+
+	/**
+	 * Forget the cached default component colors, for when the stored preferences were replaced.
+	 */
+	void clearDefaultColorCache() {
+		defaultColorCache.clear();
 	}
 
 	/**
@@ -646,8 +653,10 @@ public class SwingPreferences extends ApplicationPreferences {
 	}
 	
 	public void setWindowPosition(Class<?> c, Point p) {
-		getWindowsPreferences().put("position." + c.getCanonicalName(), "" + p.x + "," + p.y);
-		storeVersion();
+		// Called for every window move event, which includes showing a window at its stored position
+		if (putIfChanged(getWindowsPreferences(), "position." + c.getCanonicalName(), "" + p.x + "," + p.y)) {
+			storeVersion();
+		}
 	}
 
 	/**
@@ -698,13 +707,15 @@ public class SwingPreferences extends ApplicationPreferences {
 	}
 	
 	public void setWindowSize(Class<?> c, Dimension d) {
-		getWindowsPreferences().put("size." + c.getCanonicalName(), "" + d.width + "," + d.height);
-		storeVersion();
+		if (putIfChanged(getWindowsPreferences(), "size." + c.getCanonicalName(), "" + d.width + "," + d.height)) {
+			storeVersion();
+		}
 	}
 	
 	public void setWindowMaximized(Class<?> c) {
-		getWindowsPreferences().put("size." + c.getCanonicalName(), "max");
-		storeVersion();
+		if (putIfChanged(getWindowsPreferences(), "size." + c.getCanonicalName(), "max")) {
+			storeVersion();
+		}
 	}
 
 	public Integer getTableColumnWidth(String keyName, int columnIdx) {
@@ -1121,5 +1132,77 @@ public class SwingPreferences extends ApplicationPreferences {
 		for (Manufacturer m : manus) {
 			prefs.putBoolean(m.getSimpleName(), true);
 		}
+	}
+
+	/**
+	 * Return the user-defined application-level default plot appearance for the given flight data type,
+	 * or {@code null} if no default has been set.
+	 * <p>
+	 * Keyed by {@link FlightDataType#getName()}.
+	 * Color is stored as {@code "r,g,b"} (via {@link #parseColor}) and line style as its enum name.
+	 */
+	public PlotAppearance getDefaultPlotAppearance(FlightDataType type) {
+		if (type == null) {
+			return null;
+		}
+
+		String key = type.getName();
+		if (key == null || key.isEmpty()) {
+			return null;
+		}
+
+		String colorStr = getString(NODE_PLOT_DEFAULT_APPEARANCES, key + ".color", null);
+		String lineStyleStr = getString(NODE_PLOT_DEFAULT_APPEARANCES, key + ".lineStyle", null);
+		// No entry stored yet for this type.
+		if (colorStr == null && lineStyleStr == null) {
+			return null;
+		}
+
+		ORColor color = parseColor(colorStr);
+		LineStyle lineStyle = null;
+		if (lineStyleStr != null) {
+			try {
+				lineStyle = LineStyle.valueOf(lineStyleStr);
+			} catch (IllegalArgumentException ignored) {
+				// Unknown value in prefs: treat as absent.
+			}
+		}
+		PlotAppearance result = new PlotAppearance(color, lineStyle);
+
+		return result.isEmpty() ? null : result;
+	}
+
+	/**
+	 * Store a user-defined application-level default plot appearance for the given flight data type.
+	 * <p>
+	 * Keyed by {@link FlightDataType#getName()}.
+	 * Pass {@code null} (or an empty appearance) to clear the stored default.
+	 * Color is stored as {@code "r,g,b"} (via {@link #stringifyColor}); {@code null} color removes the color entry.
+	 * Line style is stored as its enum name; {@code null} line style removes the entry.
+	 */
+	public void setDefaultPlotAppearance(FlightDataType type, PlotAppearance appearance) {
+		if (type == null) {
+			return;
+		}
+
+		String key = type.getName();
+		if (key == null || key.isEmpty()) {
+			return;
+		}
+
+		// Null or empty appearance clears any previously stored default.
+		if (appearance == null || appearance.isEmpty()) {
+			putString(NODE_PLOT_DEFAULT_APPEARANCES, key + ".color", null);
+			putString(NODE_PLOT_DEFAULT_APPEARANCES, key + ".lineStyle", null);
+			return;
+		}
+		// Store color as "r,g,b", or remove the key if no color override is set.
+		ORColor color = appearance.getColor();
+		putString(NODE_PLOT_DEFAULT_APPEARANCES, key + ".color",
+				color != null ? stringifyColor(color) : null);
+		// Store line style by name, or remove the key if not set.
+		LineStyle lineStyle = appearance.getLineStyle();
+		putString(NODE_PLOT_DEFAULT_APPEARANCES, key + ".lineStyle",
+				lineStyle != null ? lineStyle.name() : null);
 	}
 }

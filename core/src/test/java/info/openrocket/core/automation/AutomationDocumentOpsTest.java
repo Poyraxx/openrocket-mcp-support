@@ -6,17 +6,106 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
-import org.junit.jupiter.api.Test;
+import com.google.inject.AbstractModule;
+import com.google.inject.Injector;
 
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import info.openrocket.core.database.motor.MotorDatabase;
+import info.openrocket.core.database.motor.ThrustCurveMotorSetDatabase;
 import info.openrocket.core.document.OpenRocketDocument;
 import info.openrocket.core.document.OpenRocketDocumentFactory;
 import info.openrocket.core.document.Simulation;
+import info.openrocket.core.file.GeneralRocketLoader;
+import info.openrocket.core.file.GeneralRocketSaver;
+import info.openrocket.core.motor.MotorConfiguration;
+import info.openrocket.core.motor.ThrustCurveMotor;
+import info.openrocket.core.rocketcomponent.MotorMount;
+import info.openrocket.core.startup.Application;
 import info.openrocket.core.util.TestRockets;
 
 class AutomationDocumentOpsTest extends AutomationTestSupport {
+
+	@Test
+	void currentSimulationOptionsSurviveCopyAndFileRoundTrip(@TempDir Path directory) throws Exception {
+		OpenRocketDocument document = OpenRocketDocumentFactory.createDocumentFromRocket(TestRockets.makeEstesAlphaIII());
+		DocumentSession session = newSession(document);
+		Map<String, Object> options = Map.of(
+				"randomSeed", 1234,
+				"randomSeedFixed", true,
+				"recoverySpeedWarning", 21.0,
+				"drogueLowSpeedWarning", 4.0,
+				"recoveryDrogueMainHighSpeedWarning", 32.0,
+				"recoveryDrogueMainLowSpeedWarning", 16.0);
+
+		List<Map<String, Object>> simulations = AutomationDocumentOps.manageSimulations(session, "create",
+				Map.of("name", "Round trip", "flightConfigurationId", TestRockets.TEST_FCID_0.toString(), "options", options));
+		String simulationId = (String) simulations.get(0).get("id");
+		AutomationDocumentOps.manageSimulations(session, "copy", Map.of("simulationId", simulationId));
+		Path file = directory.resolve("round-trip.ork");
+		new GeneralRocketSaver().save(file.toFile(), document);
+		DocumentSession reloaded = reloadSession(document, file);
+
+		List<Map<String, Object>> restored = AutomationDocumentOps.manageSimulations(reloaded, "list", Map.of());
+		assertEquals(2, restored.size());
+		for (Map<String, Object> simulation : restored) {
+			Map<?, ?> restoredOptions = assertInstanceOf(Map.class, simulation.get("options"));
+			options.forEach((key, expected) -> assertEquals(expected, restoredOptions.get(key), key));
+		}
+		List<?> optionKeys = assertInstanceOf(List.class, AutomationDocumentOps.getSchema(session).simulationSchema().get("optionKeys"));
+		assertTrue(optionKeys.containsAll(options.keySet()));
+	}
+
+	@Test
+	void motorNozzleDiameterIsExposedInSnapshotsAndSavedDocuments(@TempDir Path directory) throws Exception {
+		OpenRocketDocument document = OpenRocketDocumentFactory.createDocumentFromRocket(TestRockets.makeEstesAlphaIII());
+		MotorMount mount = null;
+		for (var component : document.getRocket()) {
+			if (component instanceof MotorMount candidate && candidate.isMotorMount()) {
+				mount = candidate;
+				break;
+			}
+		}
+		assertNotNull(mount);
+		MotorConfiguration configuration = mount.getMotorConfig(TestRockets.TEST_FCID_0);
+		configuration.setNozzleExitDiameter(0.005);
+		Path file = directory.resolve("nozzle.ork");
+		new GeneralRocketSaver().save(file.toFile(), document);
+		DocumentSession reloaded = reloadSession(document, file);
+		Map<String, Object> flightConfiguration = AutomationDocumentOps.getSnapshot(reloaded).flightConfigurations().stream()
+				.filter(item -> TestRockets.TEST_FCID_0.toString().equals(item.get("id")))
+				.findFirst().orElseThrow();
+		List<?> motors = assertInstanceOf(List.class, flightConfiguration.get("motors"));
+		assertTrue(motors.stream().anyMatch(item -> ((Map<?, ?>) item).get("nozzleExitDiameter").equals(0.005)));
+	}
+
+	private DocumentSession reloadSession(OpenRocketDocument document, Path file) throws Exception {
+		ThrustCurveMotorSetDatabase database = new ThrustCurveMotorSetDatabase();
+		for (var configuration : document.getRocket().getFlightConfigurations()) {
+			for (MotorConfiguration motor : configuration.getAllMotors()) {
+				if (motor.getMotor() instanceof ThrustCurveMotor thrustCurve) {
+					database.addMotor(thrustCurve);
+				}
+			}
+		}
+		Injector original = Application.getInjector();
+		Application.setInjector(original.createChildInjector(new AbstractModule() {
+			@Override
+			protected void configure() {
+				bind(MotorDatabase.class).toInstance(database);
+			}
+		}));
+		try {
+			return newSession(new GeneralRocketLoader(file.toFile()).load());
+		} finally {
+			Application.setInjector(original);
+		}
+	}
 
 	@Test
 	void snapshotIncludesExactCurrentAerodynamicsForSelectedConfiguration() {

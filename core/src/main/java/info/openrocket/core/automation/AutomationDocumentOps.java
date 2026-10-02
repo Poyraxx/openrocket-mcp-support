@@ -440,6 +440,9 @@ public final class AutomationDocumentOps {
 				args.containsKey("digest") ? requireString(args, "digest") : null,
 				warningSet);
 		configuration.setMotor(motor);
+		if (args.containsKey("nozzleExitDiameter")) {
+			configuration.setNozzleExitDiameter(toDouble(args.get("nozzleExitDiameter")));
+		}
 		if (args.containsKey("ejectionDelay")) {
 			configuration.setEjectionDelay(toDouble(args.get("ejectionDelay")));
 		}
@@ -613,6 +616,7 @@ public final class AutomationDocumentOps {
 			payload.put("ignitionEvent", normalize(configuration.getIgnitionEvent().name()));
 			payload.put("hasIgnitionOverride", configuration.hasIgnitionOverride());
 			payload.put("ejectionDelay", configuration.getEjectionDelay());
+			payload.put("nozzleExitDiameter", configuration.getNozzleExitDiameter());
 			if (motor != null) {
 				payload.put("type", normalize(motor.getMotorType().name()));
 				payload.put("designation", motor.getDesignation());
@@ -663,6 +667,11 @@ public final class AutomationDocumentOps {
 		payload.put("maxSimulationTime", options.getMaxSimulationTime());
 		payload.put("maximumStepAngle", options.getMaximumStepAngle());
 		payload.put("randomSeed", options.getRandomSeed());
+		payload.put("randomSeedFixed", options.isRandomSeedFixed());
+		payload.put("recoverySpeedWarning", options.getRecoverySpeedWarning());
+		payload.put("drogueLowSpeedWarning", options.getDrogueLowSpeedWarning());
+		payload.put("recoveryDrogueMainHighSpeedWarning", options.getRecoveryDrogueMainHighSpeedWarning());
+		payload.put("recoveryDrogueMainLowSpeedWarning", options.getRecoveryDrogueMainLowSpeedWarning());
 		payload.put("dragLookupCsvPath", options.getDragLookupCsvPath() == null ? null : options.getDragLookupCsvPath().toString());
 		payload.put("stabilityLookupCsvPath", options.getStabilityLookupCsvPath() == null ? null : options.getStabilityLookupCsvPath().toString());
 		return payload;
@@ -699,6 +708,11 @@ public final class AutomationDocumentOps {
 				case "maxsimulationtime" -> options.setMaxSimulationTime(toDouble(value));
 				case "maximumstepangle" -> options.setMaximumStepAngle(toDouble(value));
 				case "randomseed" -> options.setRandomSeed((int) Math.round(toDouble(value)));
+				case "randomseedfixed" -> options.setRandomSeedFixed(truthy(value));
+				case "recoveryspeedwarning" -> options.setRecoverySpeedWarning(toDouble(value));
+				case "droguelowspeedwarning" -> options.setDrogueLowSpeedWarning(toDouble(value));
+				case "recoverydroguemainhighspeedwarning" -> options.setRecoveryDrogueMainHighSpeedWarning(toDouble(value));
+				case "recoverydroguemainlowspeedwarning" -> options.setRecoveryDrogueMainLowSpeedWarning(toDouble(value));
 				case "draglookupcsvpath" -> {
 					if (value == null || String.valueOf(value).isBlank()) {
 						options.clearDragLookup();
@@ -731,6 +745,7 @@ public final class AutomationDocumentOps {
 		conditions.setAOA(0);
 		conditions.setRollRate(0);
 
+		aerodynamicCalculator.checkGeometry(configuration, configuration.getRocket(), warnings);
 		var cp = aerodynamicCalculator.getWorstCP(configuration, conditions, warnings);
 		var cg = MassCalculator.calculateLaunch(configuration).getCM();
 
@@ -1007,6 +1022,11 @@ public final class AutomationDocumentOps {
 				"maxSimulationTime",
 				"maximumStepAngle",
 				"randomSeed",
+				"randomSeedFixed",
+				"recoverySpeedWarning",
+				"drogueLowSpeedWarning",
+				"recoveryDrogueMainHighSpeedWarning",
+				"recoveryDrogueMainLowSpeedWarning",
 				"dragLookupCsvPath",
 				"stabilityLookupCsvPath"));
 		return schema;
@@ -1023,6 +1043,9 @@ public final class AutomationDocumentOps {
 				"set_motor",
 				"clear_motor"));
 		schema.put("stageActivationShape", "list or map");
+		schema.put("motorOptionKeys", List.of("motorMountEnabled", "overhang", "designation", "type",
+				"manufacturer", "diameter", "length", "digest", "ejectionDelay", "useDefaultIgnition",
+				"ignitionDelay", "ignitionEvent", "nozzleExitDiameter"));
 		return schema;
 	}
 

@@ -4,8 +4,10 @@ $repoRoot = $PSScriptRoot
 $gradleWrapper = Join-Path $repoRoot 'gradlew.bat'
 $installRoot = Join-Path $repoRoot 'build\install\info.openrocket'
 $libPath = Join-Path $installRoot 'lib\*'
-$coreJarPath = Join-Path $installRoot 'lib\core-26.xx-SNAPSHOT.jar'
-$swingJarPath = Join-Path $installRoot 'lib\swing-26.xx-SNAPSHOT.jar'
+$buildVersion = ((Get-Content -LiteralPath (Join-Path $repoRoot 'core\src\main\resources\build.properties') |
+    Where-Object { $_ -match '^build\.version=' }) -split '=', 2)[1].Trim()
+$coreJarPath = Join-Path $installRoot "lib\core-$buildVersion.jar"
+$swingJarPath = Join-Path $installRoot "lib\swing-$buildVersion.jar"
 $logDirectory = Join-Path $env:USERPROFILE '.openrocket'
 $activityLogPath = Join-Path $logDirectory 'ai-automation.log'
 
@@ -82,7 +84,7 @@ function Resolve-JavaExecutable {
         return $javaCommand.Source
     }
 
-    throw 'Java launcher not found. Install Java 17+ and make sure JAVA_HOME or PATH is set.'
+    throw 'Java launcher not found. Install JDK 17 and make sure JAVA_HOME or PATH is set.'
 }
 
 if (-not (Test-Path $gradleWrapper)) {
@@ -110,8 +112,9 @@ Write-Host ''
 Get-Content -Path `$logPath -Tail 50 -Wait
 "@
 
+$encodedTailCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($tailCommand))
 Start-Process -FilePath 'powershell.exe' `
-    -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $tailCommand) `
+    -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encodedTailCommand) `
     -WorkingDirectory $repoRoot
 
 $javaExe = Resolve-JavaExecutable
@@ -160,4 +163,9 @@ foreach ($arg in $args) {
     $arguments.Add([string] $arg)
 }
 
-Start-Process -FilePath $javaExe -ArgumentList $arguments -WorkingDirectory $installRoot
+$argumentFile = Join-Path $installRoot 'openrocket-live.args'
+$quotedArguments = $arguments | ForEach-Object {
+    '"' + $_.Replace('\', '\\').Replace('"', '\"').Replace("`r", '\r').Replace("`n", '\n') + '"'
+}
+[IO.File]::WriteAllLines($argumentFile, $quotedArguments, [Text.UTF8Encoding]::new($false))
+Start-Process -FilePath $javaExe -ArgumentList ('"@' + $argumentFile + '"') -WorkingDirectory $installRoot -WindowStyle Hidden

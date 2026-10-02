@@ -49,13 +49,13 @@ public class PinkNoiseWindModel implements WindModel {
 	private double direction = Math.PI / 2; // this is an East wind
 	private double standardDeviation = 0;
 
-	private final int seed;
+	private int seed;
 
 	private PinkNoise randomSource = null;
 	private double time1;
 	private double value1, value2;
 
-	private final List<StateChangeListener> listeners = new ArrayList<>();
+	private List<StateChangeListener> listeners = new ArrayList<>();
 
 	/**
 	 * Construct a new wind simulation with a specific seed value.
@@ -68,6 +68,12 @@ public class PinkNoiseWindModel implements WindModel {
 
 	public PinkNoiseWindModel() {
 		this(new Random().nextInt());
+	}
+
+	@Override
+	public void setSeed(int seed) {
+		this.seed = seed ^ SEED_RANDOMIZATION;
+		reset();
 	}
 
 	/**
@@ -97,6 +103,24 @@ public class PinkNoiseWindModel implements WindModel {
 		double intensity = getTurbulenceIntensity();
 		this.average = average;
 		setTurbulenceIntensity(intensity);
+		fireChangeEvent();
+	}
+
+	/**
+	 * Set the average wind speed without changing the configured standard deviation.
+	 * If the average wind speed is negative, the direction will be reversed.
+	 *
+	 * @param average the average wind speed to set
+	 */
+	public void setAveragePreservingStandardDeviation(double average) {
+		if (average < 0) {
+			average = -average;
+			setDirection(Math.PI + getDirection());
+		}
+		if (average == this.average) {
+			return;
+		}
+		this.average = average;
 		fireChangeEvent();
 	}
 
@@ -238,6 +262,8 @@ public class PinkNoiseWindModel implements WindModel {
 		try {
 			PinkNoiseWindModel clone = (PinkNoiseWindModel) super.clone();
 			clone.loadFrom(this);
+			clone.listeners = new ArrayList<>();
+			clone.reset();
 			return clone;
 		} catch (CloneNotSupportedException e) {
 			throw new AssertionError(); // This should never happen

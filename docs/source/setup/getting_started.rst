@@ -22,17 +22,17 @@ The User interface
 
 The OpenRocket user interface is divided horizontally into four sections:
 
-- :guilabel:`Main Menu` (green)
-- :guilabel:`Task Tabs` (black)
-- :guilabel:`Rocket Design`, :guilabel:`Motors & Configuration`, and :guilabel:`Flight Simulation Pane` (red)
-- :guilabel:`Rocket Views Pane` (blue)
+- :guilabel:`Main Menu`
+- :guilabel:`Task Tabs`
+- :guilabel:`Rocket Design`, :guilabel:`Motors & Configuration`, and :guilabel:`Flight Simulations` pane
+- :guilabel:`Rocket Views Pane`
 
 .. figure:: /img/setup/getting_started/2023.01.Guide.User_Interface.png
    :width: 95%
    :align: center
    :figclass: or-image-border
 
-   UI of OpenRocket divided into four
+   The current development interface, with the menu and task tabs at the top, the design pane in the middle, and the rocket view below. The introductory screenshots on this page use the bundled A simple model rocket example.
 
 Main Menu
 ---------
@@ -45,7 +45,7 @@ File
 ^^^^
 
 .. figure:: /img/setup/getting_started/02.04.01.File_Menu.png
-   :width: 35%
+   :width: 95%
    :align: center
    :figclass: or-image-border
 
@@ -74,7 +74,7 @@ Edit
 ^^^^
 
 .. figure:: /img/setup/getting_started/OR.Guide.User_Interface.04.02.File.png
-   :width: 35%
+   :width: 95%
    :align: center
    :figclass: or-image-border
 
@@ -91,7 +91,7 @@ Tools
 ^^^^^
 
 .. figure:: /img/setup/getting_started/OR.Guide.User_Interface.04.03.File.png
-   :width: 35%
+   :width: 95%
    :align: center
    :figclass: or-image-border
 
@@ -108,7 +108,7 @@ Help
 ^^^^
 
 .. figure:: /img/setup/getting_started/OR.Guide.User_Interface.04.04.File.png
-   :width: 25%
+   :width: 95%
    :align: center
    :figclass: or-image-border
 
@@ -269,6 +269,8 @@ you become familiar with the OpenRocket user interface and generally accepted ro
 looking at how an example is assembled, making changes to the example, and understanding how to simulate flights.
 
 The example designs are found here:
+
+Select :menuselection:`File --> Open example` to open this list:
 
 .. figure:: /img/setup/getting_started/2023.01.Open_Example.png
    :width: 95%
@@ -730,8 +732,8 @@ After splitting the fins, **SAVE AND REOPEN THE DESIGN FILE**, then view in **3D
 Viewing in Photo Studio
 =======================
 
-So, what will this bird look like in flight? For that, we can use the **Photo Studio** tool. However, to get a representative
-representation, you need to add a motor first.
+So, what will this bird look like in flight? For that, we can use the **Photo Studio** tool. Add a motor first if you want
+the preview to include exhaust effects.
 
 Selecting a Motor
 -----------------
@@ -787,9 +789,8 @@ and even add some cool effects.
 
    The rocket inside **Photo Studio**.
 
-So why did you to add a motor before going to Photo Studio? Because,
-**you can't activate the flame effect in Photo Studio if your rocket does not have a motor**, and the flame effect is
-arguably the coolest part of Photo Studio! Go to the :guilabel:`Effects` tab and enable the :guilabel:`Flame` effect.
+Why add a motor before going to Photo Studio? Exhaust effects are rendered only for motors in the selected flight
+configuration. Go to the :guilabel:`Effects` tab and enable the :guilabel:`Flame` effect.
 
 .. figure:: /img/setup/getting_started/12.12.03.Rocket_Build.Photo_Studio.png
    :width: 85%

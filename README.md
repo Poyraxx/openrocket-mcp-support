@@ -1,6 +1,6 @@
 ![OpenRocket banner](.github/banner.png)
 
-![Build Status](https://github.com/openrocket/openrocket/actions/workflows/build.yml/badge.svg)
+![Build Status](https://github.com/Poyraxx/openrocket-mcp-support/actions/workflows/build.yml/badge.svg)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 ![GitHub release](https://img.shields.io/github/release/openrocket/openrocket.svg)
 [![Github Releases (by release)](https://img.shields.io/github/downloads/openrocket/openrocket/latest/total.svg)](https://GitHub.com/openrocket/openrocket/releases/)
@@ -31,34 +31,42 @@ This repository is a modified OpenRocket fork that adds MCP-based AI control on 
 
 ### Quick start for the MCP-enabled version
 
-1. Install Java 17 or newer.
-2. Clone this repository.
+1. Install JDK 17 and set `JAVA_HOME` to its installation directory.
+2. Clone this repository with its component database:
+
+```powershell
+git clone --recurse-submodules https://github.com/Poyraxx/openrocket-mcp-support.git
+cd openrocket-mcp-support
+```
+
 3. Start the OpenRocket live session:
 
 ```powershell
 .\run-openrocket-live.cmd
 ```
 
-4. Start the MCP server in a second terminal:
+4. Configure your MCP client to launch `mcp\run-openrocket-mcp.cmd` over STDIO. On Windows, use `cmd.exe` as the command and `/c` followed by the absolute launcher path as its arguments. The client starts and manages the server process.
+5. Open a design in OpenRocket, then ask the client to call `list_targets`, `attach_target`, and `get_snapshot` before editing or running simulations.
 
-```powershell
-.\mcp\run-openrocket-mcp.cmd
-```
+The Windows launchers require JDK 17, Git, PowerShell, and internet access for the first build. For an existing clone, run `git submodule update --init --recursive`. If the component database is unavailable, the launchers can build without the expanded parts catalog.
 
-5. Point your MCP client to `mcp\run-openrocket-mcp.cmd`.
+### What's New in v0.2.0
 
-For Codex, use `mcp\run-openrocket-mcp.cmd` as the server command.
+Synced with [OpenRocket unstable at 259ba462a](https://github.com/openrocket/openrocket/commit/259ba462a) on 2026-10-02. This is a development snapshot of OpenRocket, not a new official stable release.
+
+- Updated fin-body interference, powered base drag, atmospheric motor thrust correction, and geometry warnings.
+- Included upstream Monte Carlo landing dispersion, recovery warning settings, motor database safeguards, and the LWJGL 3D renderer.
+- Added MCP read/write support for fixed random seeds, recovery speed warning thresholds, and motor nozzle exit diameter.
+- Restored the built-in component catalog and the pinned external component database.
+- Fixed Windows launchers for paths containing spaces, version changes, and clean MCP STDIO output.
+- Enabled CI on `main` and isolated the heap budget test without raising its memory limit.
+
+Simulation results may differ from the previous version because the upstream aerodynamic and motor models have changed. Re-run saved simulations after updating.
 
 ### What the launchers do
 
-- `run-openrocket-live.cmd`
-  - builds `installDist` when needed
-  - starts OpenRocket with the localhost live bridge enabled
-  - opens an `OpenRocket AI Console` window that tails `%USERPROFILE%\.openrocket\ai-automation.log`
-- `mcp\run-openrocket-mcp.cmd`
-  - builds `:mcp:installDist`
-  - starts the stdio MCP server
-  - forwards automation activity to the same OpenRocket log file
+- `run-openrocket-live.cmd` builds `installDist` when needed, starts OpenRocket with the localhost live bridge, and opens `OpenRocket AI Console` to show `%USERPROFILE%\.openrocket\ai-automation.log`.
+- `mcp\run-openrocket-mcp.cmd` builds `:mcp:installDist` and starts the STDIO MCP server. Build output goes to stderr; stdout is reserved for MCP messages. Automation activity is written to the same log file.
 
 ### Project layout
 
@@ -73,7 +81,17 @@ For Codex, use `mcp\run-openrocket-mcp.cmd` as the server command.
 - Custom motor files are not bundled in this standalone repo; import your own `.eng` files if needed.
 - This project remains under OpenRocket's GPL licensing terms. See [LICENSE.TXT](LICENSE.TXT).
 
+![Four designs rendered in OpenRocket: Atemis, Vortikon, a parallel-booster rocket, and a tube-fin rocket](docs/source/img/showcase/rocket-gallery.jpg)
+
+Explore scale models, detailed decals, pods, staging, and unusual fin shapes. [Browse the gallery](docs/source/introduction/gallery.rst) or [watch Vortikon rotate](docs/source/_static/media/vortikon-rotation.mp4).
+
 --------
+
+## 💾 Installers
+
+You can find the OpenRocket installers [here](https://openrocket.info/downloads.html).
+
+Release notes are available on each [release's page](https://github.com/openrocket/openrocket/releases) or on [our website](https://openrocket.info/release_notes.html).
 
 ## 🛠️ Design, Visualize, and Analyze
 
@@ -81,10 +99,14 @@ For Codex, use `mcp\run-openrocket-mcp.cmd` as the server command.
    ![Three-stage rocket - 2D](.github/OpenRocket_home_2D.png)
 
 2. **Visualize** your masterpiece in 3D:
-   ![Three-stage rocket - 3D](.github/OpenRocket_home_3D.png)
+   ![Three-stage rocket - 3D Finished view](.github/OpenRocket_home_3D.png)
 
 3. **Plot & Analyze** your simulation results for precision and improvements:
-   ![Three-stage rocket - Simulation plot](.github/OpenRocket_sim.png)
+   ![Three-stage rocket - sustainer altitude and vertical velocity during ascent](.github/OpenRocket_sim.png)
+
+### Choose your theme
+
+![The same three-stage rocket shown in OpenRocket's Light, Dark, and Dark High Contrast themes](docs/source/img/showcase/themes.gif)
 
 ## 🌟 Features
 
@@ -100,11 +122,7 @@ For Codex, use `mcp\run-openrocket-mcp.cmd` as the server command.
 
 📖 Read more on [our website](https://openrocket.info/).
 
-## 💾 Installers
-
-You can find the OpenRocket installers [here](https://openrocket.info/downloads.html).
-
-Release notes are available on each [release's page](https://github.com/openrocket/openrocket/releases) or on [our website](https://openrocket.info/release_notes.html).
+OpenRocket does not collect telemetry or upload rocket designs. It makes network requests for user-facing functions such as checking for application and motor-database updates, opening online resources, and submitting a bug report when requested by the user. Internet access can be disabled in the application preferences.
 
 ## 📖 Documentation
 
@@ -116,9 +134,9 @@ You can find our documentation on [ReadTheDocs](https://openrocket.readthedocs.i
 
 The easiest way to get familiar with OpenRocket is to open one of our in-program example designs:
 
-![Get started with the example designs](.github/getting-started.png)
+<img src=".github/getting-started.png" alt="OpenRocket workspace with File → Open example expanded" width="800">
 
-Dive into the essentials: adjust component dimensions, plot a simulation, swap out motors, ... Explore the impact of your changes and, most importantly, enjoy the process! 😊
+Dive into the essentials: adjust component dimensions, plot a simulation, swap out motors, and more. Explore the impact of your changes and, most importantly, enjoy the process! 😊
 
 ---
 
@@ -180,11 +198,13 @@ Help us soar higher! Whether it's implementing features, writing documentation, 
 - [Daniel Williams](https://github.com/teyrana) - Pod support, maintainer
 - [Joe Pfeiffer](https://github.com/JoePfeiffer) - Maintainer
 - [Billy Olsen](https://github.com/wolsen) - Maintainer
-- [Sibo Van Gool](https://github.com/SiboVG) - RASAero file format, 3D OBJ export, dark theme, maintainer
+- [Sibo Van Gool](https://github.com/SiboVG) - RASAero file format, 3D OBJ export, dark theme, LWJGL 3D engine, maintainer
 - [Neil Weinstock](https://github.com/neilweinstock) - Tester, icons, forum support
 - [H. Craig Miller](https://github.com/hcraigmiller) - Tester
 
 You can view the full list of contributors [here](https://github.com/openrocket/openrocket/graphs/contributors).
+
+Windows code signing provided by [SignPath.io](https://about.signpath.io/).
 
 ### 🌍Translators
 - Tripoli France
@@ -198,10 +218,75 @@ You can view the full list of contributors [here](https://github.com/openrocket/
 - Mohamed Amin Elkebsi
 - Oleksandr Hladin
 - taotieren Simplified Chinese
+- Yüksel Dağhan Güven
+
+Crowdin translators:
+
+<!-- CROWDIN-CONTRIBUTORS-START -->
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="top">
+        <a href="https://crowdin.com/profile/sibo.vangool"><img alt="logo" style="width: 64px" src="https://crowdin-static.cf-downloads.crowdin.com/avatar/13388561/medium/a0b098faad64d4bda30be68206e5a4a8_default.png" />
+          <br />
+          <sub><b>Sibo Van Gool</b></sub>
+          <br />
+          <sub><b>(sibo.vangool)</b></sub></a>
+        <br />
+        <sub><b>164104 words</b></sub>
+        <br /><sub><b><code title="Arabic">ar</code></b>, <b><code title="Chinese Simplified">zh-CN</code></b>, <b><code title="Czech">cs</code></b>, <b><code title="Dutch">nl</code></b>, <b><code title="French">fr</code></b>, <b><code title="Italian">it</code></b>, <b><code title="Japanese">ja</code></b>, <b><code title="Polish">pl</code></b>, <b><code title="Portuguese">pt-PT</code></b>, <b><code title="Russian">ru</code></b>, <b><code title="Spanish">es-ES</code></b>, <b><code title="Turkish">tr</code></b>, <b><code title="Ukrainian">uk</code></b></sub>
+      </td>
+      <td align="center" valign="top">
+        <a href="https://crowdin.com/profile/3Dmachine"><img alt="logo" style="width: 64px" src="https://crowdin-static.cf-downloads.crowdin.com/avatar/14111187/medium/fe245408c845d689664e2daace62d768_default.png" />
+          <br />
+          <sub><b>3Dmachine</b></sub></a>
+        <br />
+        <sub><b>29030 words</b></sub>
+        <br /><sub><b><code title="French">fr</code></b>, <b><code title="Spanish">es-ES</code></b></sub>
+      </td>
+      <td align="center" valign="top">
+        <a href="https://crowdin.com/profile/guvendaghan01"><img alt="logo" style="width: 64px" src="https://crowdin-static.cf-downloads.crowdin.com/avatar/17816801/medium/aea8419d4c08c5191c4a1bd5c123ccf9.jpeg" />
+          <br />
+          <sub><b>Yüksel Dağhan Güven</b></sub>
+          <br />
+          <sub><b>(guvendaghan01)</b></sub></a>
+        <br />
+        <sub><b>3355 words</b></sub>
+        <br /><sub><b><code title="Turkish">tr</code></b></sub>
+      </td>
+      <td align="center" valign="top">
+        <a href="https://crowdin.com/profile/Fabosch"><img alt="logo" style="width: 64px" src="https://crowdin-static.cf-downloads.crowdin.com/avatar/17817441/medium/1c11aab50580e920465faba3b24fb172_default.png" />
+          <br />
+          <sub><b>Fabosch</b></sub></a>
+        <br />
+        <sub><b>1752 words</b></sub>
+        <br /><sub><b><code title="Czech">cs</code></b></sub>
+      </td>
+      <td align="center" valign="top">
+        <a href="https://crowdin.com/profile/guneyozsan"><img alt="logo" style="width: 64px" src="https://crowdin-static.cf-downloads.crowdin.com/avatar/17797515/medium/f4204daa851d133bd1e5f7aae165b85c_default.png" />
+          <br />
+          <sub><b>guneyozsan</b></sub></a>
+        <br />
+        <sub><b>908 words</b></sub>
+        <br /><sub><b><code title="Turkish">tr</code></b></sub>
+      </td>
+      <td align="center" valign="top">
+        <a href="https://crowdin.com/profile/hakucin"><img alt="logo" style="width: 64px" src="https://crowdin-static.cf-downloads.crowdin.com/avatar/17681278/medium/86142d38b4b112b5280a97ac36d31726.png" />
+          <br />
+          <sub><b>Hello.1234a</b></sub>
+          <br />
+          <sub><b>(hakucin)</b></sub></a>
+        <br />
+        <sub><b>136 words</b></sub>
+        <br /><sub><b><code title="Japanese">ja</code></b></sub>
+      </td>
+    </tr>
+  </tbody>
+</table><a href="https://crowdin.com/project/openrocket" target="_blank">Translate in Crowdin 🚀</a>
+<!-- CROWDIN-CONTRIBUTORS-END -->
 
 Want to help us translate OpenRocket into your language? Join our [Crowdin project](https://crowdin.com/project/openrocket) and contribute!
 
 ## 📜 License
 
 OpenRocket is proudly open-source under the [GNU GPL](https://www.gnu.org/licenses/gpl-3.0.en.html) license. Feel free to use, study, and extend.
-

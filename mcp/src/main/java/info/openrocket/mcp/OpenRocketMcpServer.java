@@ -1,6 +1,7 @@
 package info.openrocket.mcp;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -54,16 +55,18 @@ public final class OpenRocketMcpServer {
 	private McpSyncServer server;
 
 	public static void main(String[] args) throws Exception {
+		PrintStream protocolOutput = System.out;
+		System.setOut(System.err);
 		OpenRocketMcpServer server = new OpenRocketMcpServer();
-		server.start();
+		server.start(protocolOutput);
 		Runtime.getRuntime().addShutdownHook(new Thread(server::shutdown, "openrocket-mcp-shutdown"));
 		new CountDownLatch(1).await();
 	}
 
-	private void start() {
-		var transport = new StdioServerTransportProvider(new JacksonMcpJsonMapperSupplier().get());
+	private void start(PrintStream protocolOutput) {
+		var transport = new StdioServerTransportProvider(new JacksonMcpJsonMapperSupplier().get(), System.in, protocolOutput);
 		server = McpServer.sync(transport)
-				.serverInfo("openrocket-mcp", "0.1.0")
+				.serverInfo("openrocket-mcp", "0.2.0")
 				.capabilities(ServerCapabilities.builder()
 						.tools(true)
 						.resources(false, true)

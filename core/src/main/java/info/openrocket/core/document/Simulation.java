@@ -3,7 +3,9 @@ package info.openrocket.core.document;
 import java.lang.reflect.InvocationTargetException;
 import java.util.EventListener;
 import java.util.EventObject;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import info.openrocket.core.simulation.FlightEvent;
@@ -22,6 +24,7 @@ import info.openrocket.core.rocketcomponent.Rocket;
 import info.openrocket.core.simulation.BasicEventSimulationEngine;
 import info.openrocket.core.simulation.DefaultSimulationOptionFactory;
 import info.openrocket.core.simulation.FlightData;
+import info.openrocket.core.simulation.FlightDataType;
 import info.openrocket.core.simulation.RK4SimulationStepper;
 import info.openrocket.core.simulation.SimulationConditions;
 import info.openrocket.core.simulation.SimulationEngine;
@@ -30,6 +33,7 @@ import info.openrocket.core.simulation.SimulationStepper;
 import info.openrocket.core.simulation.exception.SimulationException;
 import info.openrocket.core.simulation.extension.SimulationExtension;
 import info.openrocket.core.simulation.listeners.SimulationListener;
+import info.openrocket.core.simulation.montecarlo.MonteCarloSettings;
 import info.openrocket.core.startup.Application;
 import info.openrocket.core.util.ArrayList;
 import info.openrocket.core.util.BugException;
@@ -38,6 +42,7 @@ import info.openrocket.core.util.Config;
 import info.openrocket.core.util.ModID;
 import info.openrocket.core.util.SafetyMutex;
 import info.openrocket.core.util.StateChangeListener;
+import info.openrocket.core.util.StringUtils;
 
 /**
  * A class defining a simulation, its conditions and simulated data.
@@ -147,6 +152,9 @@ public class Simulation implements ChangeSource, Cloneable {
 	/** The conditions to use */
 	// TODO: HIGH: Change to use actual conditions class??
 	private SimulationOptions options = new SimulationOptions();
+
+	/** Optional user configuration for a landing-dispersion analysis. */
+	private MonteCarloSettings landingDispersionSettings;
 	
 	private ArrayList<SimulationExtension> simulationExtensions = new ArrayList<>();
 	
@@ -166,6 +174,7 @@ public class Simulation implements ChangeSource, Cloneable {
 	private String simulatedConfigurationDescription = null;
 	private FlightData simulatedData = null;
 	private ModID simulatedConfigurationModID = ModID.INVALID;
+	private final Map<String, PlotAppearance> plotAppearances = new HashMap<>();	// Optional per-series plot overrides (stored by FlightDataType symbol for stable persistence).
 
 	/**
 	 * Create a new simulation for the rocket. Parent document should also be provided.
@@ -200,6 +209,11 @@ public class Simulation implements ChangeSource, Cloneable {
 
 	public Simulation(OpenRocketDocument document, Rocket rocket, Status status, String name, SimulationOptions options,
 			List<SimulationExtension> extensions, FlightData data) {
+		this(document, rocket, status, name, options, extensions, data, null);
+	}
+
+	public Simulation(OpenRocketDocument document, Rocket rocket, Status status, String name, SimulationOptions options,
+			List<SimulationExtension> extensions, FlightData data, Map<String, PlotAppearance> plotAppearances) {
 
 		if (rocket == null)
 			throw new IllegalArgumentException("rocket cannot be null");
@@ -226,6 +240,7 @@ public class Simulation implements ChangeSource, Cloneable {
 		this.simulatedConfigurationModID = config.getModID();
 
 		this.simulationExtensions.addAll(extensions);
+		setPlotAppearancesInternal(plotAppearances, false);
 	}
 
 	public FlightConfiguration getActiveConfiguration() {
@@ -321,6 +336,36 @@ public class Simulation implements ChangeSource, Cloneable {
 	public SimulationOptions getOptions() {
 		mutex.verify();
 		return options;
+	}
+
+	/**
+	 * Return the landing-dispersion settings saved for this simulation.
+	 *
+	 * @return immutable settings, or {@code null} when the user has not configured
+	 *         landing dispersion for this simulation
+	 */
+	public MonteCarloSettings getLandingDispersionSettings() {
+		mutex.verify();
+		return landingDispersionSettings;
+	}
+
+	/**
+	 * Save landing-dispersion settings for this simulation. Passing {@code null}
+	 * removes the optional configuration.
+	 *
+	 * @param settings immutable settings to save, or {@code null}
+	 */
+	public void setLandingDispersionSettings(MonteCarloSettings settings) {
+		mutex.lock("setLandingDispersionSettings");
+		try {
+			if (Objects.equals(this.landingDispersionSettings, settings)) {
+				return;
+			}
+			this.landingDispersionSettings = settings;
+			fireChangeEvent();
+		} finally {
+			mutex.unlock("setLandingDispersionSettings");
+		}
 	}
 	
 	
@@ -472,6 +517,7 @@ public class Simulation implements ChangeSource, Cloneable {
 			throws SimulationException {
 		mutex.lock("simulate");
 		SimulationEngine simulator = null;
+		boolean completed = false;
 		simulatedData = null;
 		try {
 			
@@ -504,6 +550,7 @@ public class Simulation implements ChangeSource, Cloneable {
 			log.debug("Simulation: calling simulator");
 			t1 = System.currentTimeMillis();
 			simulator.simulate(simulationConditions);
+			completed = true;
 			t2 = System.currentTimeMillis();
 			log.debug("Simulation: returning from simulator, simulation took " + (t2 - t1) + "ms");
 
@@ -518,7 +565,7 @@ public class Simulation implements ChangeSource, Cloneable {
 				simulatedData = simulator.getFlightData();
 			}
 			
-			status = Status.UPTODATE;
+			status = completed ? Status.UPTODATE : Status.OUTDATED;
 			fireChangeEvent();
 
 			mutex.unlock("simulate");
@@ -732,6 +779,7 @@ public class Simulation implements ChangeSource, Cloneable {
 			this.simulatedConfigurationDescription = simulation.simulatedConfigurationDescription;
 			this.simulatedConfigurationModID = simulation.simulatedConfigurationModID;
 			this.options.copyConditionsFrom(simulation.options);
+			this.landingDispersionSettings = simulation.landingDispersionSettings;
 			if (simulation.simulatedConditions == null) {
 				this.simulatedConditions = null;
 			} else if (this.simulatedConditions == null) {
@@ -771,9 +819,14 @@ public class Simulation implements ChangeSource, Cloneable {
 			newSim.name = this.name;
 			newSim.configId = this.configId;
 			newSim.options.copyConditionsFrom(this.options);
+			newSim.landingDispersionSettings = this.landingDispersionSettings;
 			newSim.simulatedConfigurationDescription = this.simulatedConfigurationDescription;
 			for (SimulationExtension c : this.simulationExtensions) {
 				newSim.simulationExtensions.add(c.clone());
+			}
+			newSim.plotAppearances.clear();
+			for (Map.Entry<String, PlotAppearance> entry : this.plotAppearances.entrySet()) {
+				newSim.plotAppearances.put(entry.getKey(), entry.getValue().clone());
 			}
 			newSim.simulationStepperClass = this.simulationStepperClass;
 			newSim.aerodynamicCalculatorClass = this.aerodynamicCalculatorClass;
@@ -781,6 +834,42 @@ public class Simulation implements ChangeSource, Cloneable {
 			return newSim;
 		} finally {
 			mutex.unlock("duplicateSimulation");
+		}
+	}
+
+	/**
+	 * Create a deep copy of this simulation that shares no mutable state with it. The copy
+	 * has its own rocket and options and is not attached to a document, so it may run on a
+	 * background thread without modifying the source simulation.
+	 * <p>
+	 * Ordinary {@link #clone()} keeps a reference to the same rocket, which means two
+	 * concurrent simulations can share mutable configuration and aerodynamic caches. Use
+	 * this method when simulations of one design must run concurrently. Copy construction
+	 * is synchronized; the returned copies may then be simulated in parallel.
+	 *
+	 * @return an independent, not-yet-simulated copy of this simulation
+	 */
+	public synchronized Simulation duplicateForIndependentSimulation() {
+		mutex.lock("duplicateForIndependentSimulation");
+		try {
+			final Simulation copy = new Simulation(null, this.rocket.copyWithOriginalID());
+			copy.name = this.name;
+			copy.configId = this.configId;
+			// A full options clone, not copyConditionsFrom: the latter copies only the
+			// launch conditions, leaving the rest of the copy on preference defaults.
+			copy.options = this.options.clone();
+			copy.options.addChangeListener(copy.new ConditionListener());
+			copy.landingDispersionSettings = this.landingDispersionSettings;
+			copy.listeners = new ArrayList<>();
+			for (SimulationExtension extension : this.simulationExtensions) {
+				copy.simulationExtensions.add(extension.clone());
+			}
+			copy.simulationStepperClass = this.simulationStepperClass;
+			copy.aerodynamicCalculatorClass = this.aerodynamicCalculatorClass;
+
+			return copy;
+		} finally {
+			mutex.unlock("duplicateForIndependentSimulation");
 		}
 	}
 	
@@ -824,9 +913,11 @@ public class Simulation implements ChangeSource, Cloneable {
 		return Objects.equals(this.name, other.name) &&
 				Objects.equals(this.configId, other.configId) &&
 				Objects.equals(this.options, other.options) &&
+				Objects.equals(this.landingDispersionSettings, other.landingDispersionSettings) &&
 				Objects.equals(this.simulationEngineClass, other.simulationEngineClass) &&
 				Objects.equals(this.simulationStepperClass, other.simulationStepperClass) &&
 				Objects.equals(this.aerodynamicCalculatorClass, other.aerodynamicCalculatorClass) &&
+				Objects.equals(this.plotAppearances, other.plotAppearances) &&
 				simulationExtensionsEqual(this.simulationExtensions, other.simulationExtensions);
 	}
 
@@ -864,6 +955,60 @@ public class Simulation implements ChangeSource, Cloneable {
 		}
 
 		return true;
+	}
+
+	public PlotAppearance getPlotAppearance(FlightDataType type) {
+		mutex.verify();
+		if (type == null) {
+			return null;
+		}
+		String symbol = type.getSymbol();
+		if (StringUtils.isEmpty(symbol)) {
+			return null;
+		}
+		PlotAppearance appearance = plotAppearances.get(symbol);
+		return appearance != null ? appearance.clone() : null;
+	}
+
+	public void setPlotAppearance(FlightDataType type, PlotAppearance appearance) {
+		mutex.verify();
+		if (type == null) {
+			return;
+		}
+		String symbol = type.getSymbol();
+		if (StringUtils.isEmpty(symbol)) {
+			return;
+		}
+		if (appearance == null || appearance.isEmpty()) {
+			plotAppearances.remove(symbol);
+		} else {
+			plotAppearances.put(symbol, appearance.clone());
+		}
+		fireChangeEvent();
+	}
+
+	public Map<String, PlotAppearance> getPlotAppearances() {
+		mutex.verify();
+		Map<String, PlotAppearance> copy = new HashMap<>(plotAppearances.size());
+		for (Map.Entry<String, PlotAppearance> entry : plotAppearances.entrySet()) {
+			copy.put(entry.getKey(), entry.getValue().clone());
+		}
+		return copy;
+	}
+
+	private void setPlotAppearancesInternal(Map<String, PlotAppearance> appearances, boolean notify) {
+		plotAppearances.clear();
+		if (appearances != null) {
+			for (Map.Entry<String, PlotAppearance> entry : appearances.entrySet()) {
+				PlotAppearance appearance = entry.getValue();
+				if (appearance != null && !appearance.isEmpty()) {
+					plotAppearances.put(entry.getKey(), appearance.clone());
+				}
+			}
+		}
+		if (notify) {
+			fireChangeEvent();
+		}
 	}
 
 	private static boolean configEqual(Config a, Config b) {
