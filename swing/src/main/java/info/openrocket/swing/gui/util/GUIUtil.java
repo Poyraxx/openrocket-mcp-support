@@ -190,9 +190,30 @@ public class GUIUtil {
 		Font loadedFont = loadBundledFont(UI_FONT_PATHS.get(normalizedStyle));
 		if (loadedFont == null) {
 			loadedFont = new Font(UI_FONT_FAMILY, Font.PLAIN, 1);
+		} else if (isCjkLocale(java.util.Locale.getDefault())) {
+			loadedFont = withSystemFallback(loadedFont, normalizedStyle);
 		}
 		UI_FONT_CACHE.put(normalizedStyle, loadedFont);
 		return loadedFont;
+	}
+
+	private static boolean isCjkLocale(java.util.Locale locale) {
+		String language = locale.getLanguage();
+		return "zh".equals(language) || "ja".equals(language) || "ko".equals(language);
+	}
+
+	/**
+	 * Inter has no CJK glyphs, and a font from Font.createFont gets no glyph fallback, so CJK text renders as
+	 * boxes. Registering the face and fetching it through StyleContext returns a composite font that falls back
+	 * to system fonts. Java resolves all Inter faces to one family name, so this keeps only regular and bold.
+	 */
+	private static Font withSystemFallback(Font font, String fontStyle) {
+		GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(font);
+		int style = UI_FONT_STYLE_BOLD.equals(fontStyle) || UI_FONT_STYLE_MEDIUM.equals(fontStyle)
+				? Font.BOLD : Font.PLAIN;
+		Font composite = javax.swing.text.StyleContext.getDefaultStyleContext()
+				.getFont(font.getFamily(java.util.Locale.ROOT), style, 1);
+		return composite.canDisplay('中') ? composite : new Font(Font.DIALOG, style, 1);
 	}
 
 	private static String normalizeUIFontStyle(String fontStyle) {
